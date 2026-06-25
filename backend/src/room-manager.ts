@@ -140,8 +140,15 @@ export class RoomManager {
   }
 
   public joinRoom(code: string, playerId: string, nickname: string, socketId: string): RoomState | null {
+    console.log("Join requested:", code);
+    console.log("Available rooms:", Object.keys(this.rooms));
+
     const room = this.rooms[code];
-    if (!room) return null;
+
+    if (!room) {
+      console.log("Room not found!");
+      return null;
+    }
 
     // Check if player is reconnecting
     if (room.players[playerId]) {
