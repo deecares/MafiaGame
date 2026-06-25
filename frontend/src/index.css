@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-mafia-bg text-mafia-text min-h-screen font-sans overflow-x-hidden;
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(122, 31, 31, 0.09) 0px, transparent 40%),
+      radial-gradient(at 100% 0%, rgba(27, 34, 45, 0.5) 0px, transparent 50%),
+      radial-gradient(at 50% 100%, rgba(122, 31, 31, 0.05) 0px, transparent 50%);
+    background-attachment: fixed;
+  }
+}
+
+/* Custom premium classes mapping to hex color palette */
+.glass-panel {
+  @apply bg-mafia-card/75 backdrop-blur-xl border border-mafia-border shadow-glass rounded-2xl transition-all duration-300;
+}
+
+.glass-panel-light {
+  @apply bg-white/5 backdrop-blur-md border border-white/10 rounded-xl transition-all duration-300;
+}
+
+.glass-input {
+  @apply bg-mafia-bg/90 border border-mafia-border rounded-xl px-4 py-3 text-mafia-text placeholder-mafia-textSecondary/40 focus:outline-none focus:ring-2 focus:ring-mafia-accent/50 focus:border-mafia-accent transition-all duration-300;
+}
+
+.glass-button-primary {
+  @apply bg-mafia-accent hover:bg-mafia-accentHover text-mafia-text font-semibold py-3 px-6 rounded-xl border border-mafia-border shadow-lg hover:shadow-glow active:scale-[0.97] transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100;
+}
+
+.glass-button-secondary {
+  @apply bg-mafia-bgSecondary/85 hover:bg-mafia-card text-mafia-text font-semibold py-3 px-6 rounded-xl border border-mafia-border active:scale-[0.97] transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100;
+}
+
+.glass-button-danger {
+  @apply bg-mafia-danger hover:bg-red-500 text-mafia-text font-semibold py-3 px-6 rounded-xl border border-mafia-border shadow-lg hover:shadow-red-500/20 active:scale-[0.97] transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100;
+}
+
+/* Custom scrollbars matching the palette */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-mafia-bg;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-mafia-border hover:bg-mafia-textSecondary/35 rounded-full transition-all;
+}
+
+/* Night Ambient Pulse Animation */
+@keyframes ambient-night-glow {
+  0%, 100% {
+    background-color: #0F141B;
+  }
+  50% {
+    background-color: #06080c;
+  }
+}
+
+.night-phase-bg {
+  animation: ambient-night-glow 12s ease-in-out infinite;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(122, 31, 31, 0.16) 0px, transparent 45%),
+    radial-gradient(at 100% 100%, rgba(97, 24, 24, 0.05) 0px, transparent 50%);
+}
+
+/* Particle animation helper classes */
+.particle {
+  position: absolute;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(122, 31, 31, 0.8) 0%, transparent 80%);
+  border-radius: 50%;
+}
+
+/* High Contrast Override hook */
+.high-contrast-mode {
+  --mafia-border: #F5F5F5;
+  --mafia-textSecondary: #F5F5F5;
+}
+
+.high-contrast-mode .glass-panel {
+  border-color: #F5F5F5 !important;
+  background-color: #0F141B !important;
+}
+
+.high-contrast-mode .glass-input {
+  border-color: #F5F5F5 !important;
+}
+
+.high-contrast-mode .glass-button-secondary {
+  border-color: #F5F5F5 !important;
+  background-color: #1B222D !important;
+}
