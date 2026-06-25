@@ -25,19 +25,19 @@ const io = new socket_io_1.Server(server, {
     },
 });
 const roomManager = new room_manager_1.RoomManager(io);
-// Keep track of socketId -> { roomCode, firebaseUid } for quick disconnect lookup
+// Keep track of socketId -> { roomCode, playerId } for quick disconnect lookup
 const socketRegistry = {};
 io.on('connection', (socket) => {
     console.log(`Socket connected: ${socket.id}`);
     // 1. Create Room
-    socket.on('create-room', ({ firebaseUid, nickname }, callback) => {
+    socket.on('create-room', ({ playerId, nickname }, callback) => {
         try {
-            const room = roomManager.createRoom(firebaseUid, nickname, socket.id);
+            const room = roomManager.createRoom(playerId, nickname, socket.id);
             socket.join(room.code);
-            socketRegistry[socket.id] = { roomCode: room.code, firebaseUid };
+            socketRegistry[socket.id] = { roomCode: room.code, playerId };
             console.log(`Room created: ${room.code} by ${nickname}`);
             // Callback with sanitized state for the host
-            const sanitized = roomManager.getSanitizedRoomState(room, firebaseUid);
+            const sanitized = roomManager.getSanitizedRoomState(room, playerId);
             callback({ success: true, room: sanitized });
             // Broadcast sanitized states to all clients in the room
             roomManager.broadcastRoomState(room.code);
@@ -48,17 +48,17 @@ io.on('connection', (socket) => {
         }
     });
     // 2. Join Room
-    socket.on('join-room', ({ roomCode, firebaseUid, nickname }, callback) => {
+    socket.on('join-room', ({ roomCode, playerId, nickname }, callback) => {
         try {
-            const room = roomManager.joinRoom(roomCode, firebaseUid, nickname, socket.id);
+            const room = roomManager.joinRoom(roomCode, playerId, nickname, socket.id);
             if (!room) {
                 return callback({ success: false, error: 'Room not found or game already in progress' });
             }
             socket.join(roomCode);
-            socketRegistry[socket.id] = { roomCode, firebaseUid };
+            socketRegistry[socket.id] = { roomCode, playerId };
             console.log(`${nickname} joined room: ${roomCode}`);
             // Callback with sanitized state for joining player
-            const sanitized = roomManager.getSanitizedRoomState(room, firebaseUid);
+            const sanitized = roomManager.getSanitizedRoomState(room, playerId);
             callback({ success: true, room: sanitized });
             // Update room for all clients securely
             roomManager.broadcastRoomState(roomCode);
@@ -69,30 +69,30 @@ io.on('connection', (socket) => {
         }
     });
     // 3. Toggle Ready
-    socket.on('toggle-ready', ({ roomCode, firebaseUid }) => {
-        const room = roomManager.toggleReady(roomCode, firebaseUid);
+    socket.on('toggle-ready', ({ roomCode, playerId }) => {
+        const room = roomManager.toggleReady(roomCode, playerId);
         if (room) {
             roomManager.broadcastRoomState(roomCode);
         }
     });
     // 4. Update Settings
-    socket.on('update-settings', ({ roomCode, firebaseUid, settings }) => {
-        const room = roomManager.updateSettings(roomCode, firebaseUid, settings);
+    socket.on('update-settings', ({ roomCode, playerId, settings }) => {
+        const room = roomManager.updateSettings(roomCode, playerId, settings);
         if (room) {
             roomManager.broadcastRoomState(roomCode);
         }
     });
     // 5. Start Game
-    socket.on('start-game', ({ roomCode, firebaseUid }) => {
+    socket.on('start-game', ({ roomCode, playerId }) => {
         console.log(`Host requested start for room: ${roomCode}`);
-        const room = roomManager.startGame(roomCode, firebaseUid);
+        const room = roomManager.startGame(roomCode, playerId);
         if (room) {
             roomManager.broadcastRoomState(roomCode);
         }
     });
     // 6. Submit Night Action
-    socket.on('night-action', ({ roomCode, firebaseUid, action }, callback) => {
-        const result = roomManager.submitNightAction(roomCode, firebaseUid, action);
+    socket.on('night-action', ({ roomCode, playerId, action }, callback) => {
+        const result = roomManager.submitNightAction(roomCode, playerId, action);
         if (result) {
             const { detectiveResult } = result;
             // Broadcast state to everyone in room securely
@@ -110,24 +110,24 @@ io.on('connection', (socket) => {
         }
     });
     // 7. Submit Day Vote
-    socket.on('day-vote', ({ roomCode, firebaseUid, targetUid }) => {
-        const room = roomManager.submitDayVote(roomCode, firebaseUid, targetUid);
+    socket.on('day-vote', ({ roomCode, playerId, targetUid }) => {
+        const room = roomManager.submitDayVote(roomCode, playerId, targetUid);
         if (room) {
             roomManager.broadcastRoomState(roomCode);
         }
     });
     // 8. Chat Messages
-    socket.on('send-message', ({ roomCode, firebaseUid, nickname, text, isMafiaOnly }) => {
+    socket.on('send-message', ({ roomCode, playerId, nickname, text, isMafiaOnly }) => {
         const room = roomManager.getRoom(roomCode);
         if (!room)
             return;
-        const sender = room.players[firebaseUid];
+        const sender = room.players[playerId];
         if (!sender)
             return;
         const messagePayload = {
             id: Math.random().toString(36).substring(2, 9),
             senderName: nickname,
-            senderUid: firebaseUid,
+            playerId,
             text,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             isMafiaOnly: !!isMafiaOnly,
@@ -153,8 +153,8 @@ io.on('connection', (socket) => {
         socket.to(roomCode).emit('player-typing', { nickname, isTyping });
     });
     // 9. Restart Game
-    socket.on('restart-game', ({ roomCode, firebaseUid }) => {
-        const room = roomManager.restartGame(roomCode, firebaseUid);
+    socket.on('restart-game', ({ roomCode, playerId }) => {
+        const room = roomManager.restartGame(roomCode, playerId);
         if (room) {
             roomManager.broadcastRoomState(roomCode);
         }

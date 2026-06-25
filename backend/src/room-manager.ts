@@ -2,7 +2,7 @@ import { Server } from 'socket.io';
 
 export interface Player {
   id: string; // Socket ID (current active connection)
-  firebaseUid: string; // Unique persistent ID
+  playerId: string; // Unique persistent ID
   nickname: string;
   isReady: boolean;
   isHost: boolean;
@@ -20,14 +20,14 @@ export interface GameSettings {
 
 export interface RoomState {
   code: string;
-  players: { [firebaseUid: string]: Player };
+  players: { [playerId: string]: Player };
   status: 'lobby' | 'night' | 'day-discussion' | 'day-voting' | 'game-over';
   winner: 'town' | 'mafia' | null;
   settings: GameSettings;
   nightActions: {
-    mafiaVotes: { [mafiaUid: string]: string }; // mafiaUid -> victimUid
-    doctorHeal: string | null; // victimUid
-    detectiveInvestigate: string | null; // targetUid
+    mafiaVotes: { [mafiaPlayerId: string]: string }; // mafiaPlayerId -> victimPlayerId
+    doctorHeal: string | null; // victimPlayerId
+    detectiveInvestigate: string | null; // targetPlayerId
   };
   logs: string[];
   timer: number;
@@ -45,20 +45,20 @@ export class RoomManager {
   }
 
   // Secure: Sanitize room state based on player requesting it
-  public getSanitizedRoomState(room: RoomState, clientUid: string): RoomState {
-    const clientPlayer = room.players[clientUid];
+  public getSanitizedRoomState(room: RoomState, clientPlayerId: string): RoomState {
+    const clientPlayer = room.players[clientPlayerId];
     const isClientMafia = clientPlayer?.role === 'mafia';
     
-    const sanitizedPlayers: { [firebaseUid: string]: Player } = {};
+    const sanitizedPlayers: { [playerId: string]: Player } = {};
     
-    Object.entries(room.players).forEach(([uid, p]) => {
-      const isSelf = uid === clientUid;
+    Object.entries(room.players).forEach(([pid, p]) => {
+      const isSelf = pid === clientPlayerId;
       const isTeamMafia = isClientMafia && p.role === 'mafia';
       const isDead = !p.isAlive;
       const isLobby = room.status === 'lobby';
       const isGameOver = room.status === 'game-over';
 
-      sanitizedPlayers[uid] = {
+      sanitizedPlayers[pid] = {
         ...p,
         // Only show role details if it is self, mafia teammate, dead, or if game is lobby/over
         role: (isSelf || isTeamMafia || isDead || isLobby || isGameOver) ? p.role : null,
@@ -89,15 +89,15 @@ export class RoomManager {
         if (socket) {
           // Find player matching socket connection
           const player = Object.values(room.players).find(p => p.id === socketId);
-          const clientUid = player ? player.firebaseUid : '';
-          const sanitized = this.getSanitizedRoomState(room, clientUid);
+          const clientPlayerId = player ? player.playerId : '';
+          const sanitized = this.getSanitizedRoomState(room, clientPlayerId);
           socket.emit('room-updated', sanitized);
         }
       }
     }
   }
 
-  public createRoom(hostUid: string, hostNickname: string, socketId: string): RoomState {
+  public createRoom(hostPlayerId: string, hostNickname: string, socketId: string): RoomState {
     let code = '';
     do {
       code = Math.floor(100000 + Math.random() * 900000).toString(); // 6 digit code
@@ -106,9 +106,9 @@ export class RoomManager {
     const newRoom: RoomState = {
       code,
       players: {
-        [hostUid]: {
+        [hostPlayerId]: {
           id: socketId,
-          firebaseUid: hostUid,
+          playerId: hostPlayerId,
           nickname: hostNickname,
           isReady: true, // Host is always ready
           isHost: true,
@@ -139,13 +139,13 @@ export class RoomManager {
     return newRoom;
   }
 
-  public joinRoom(code: string, firebaseUid: string, nickname: string, socketId: string): RoomState | null {
+  public joinRoom(code: string, playerId: string, nickname: string, socketId: string): RoomState | null {
     const room = this.rooms[code];
     if (!room) return null;
 
     // Check if player is reconnecting
-    if (room.players[firebaseUid]) {
-      const player = room.players[firebaseUid];
+    if (room.players[playerId]) {
+      const player = room.players[playerId];
       player.id = socketId;
       player.disconnected = false;
       room.logs.push(`${player.nickname} reconnected.`);
@@ -158,9 +158,9 @@ export class RoomManager {
     }
 
     // Assign standard player fields
-    room.players[firebaseUid] = {
+    room.players[playerId] = {
       id: socketId,
-      firebaseUid,
+      playerId,
       nickname,
       isReady: false,
       isHost: false,
@@ -178,18 +178,18 @@ export class RoomManager {
     return room;
   }
 
-  public disconnectPlayer(socketId: string): { roomCode: string; playerUid: string; isEmpty: boolean } | null {
+  public disconnectPlayer(socketId: string): { roomCode: string; playerId: string; isEmpty: boolean } | null {
     for (const code of Object.keys(this.rooms)) {
       const room = this.rooms[code];
       const playerEntry = Object.entries(room.players).find(([_, p]) => p.id === socketId);
       
       if (playerEntry) {
-        const [uid, player] = playerEntry;
+        const [pid, player] = playerEntry;
         player.disconnected = true;
 
         // If in lobby, we can just remove them outright
         if (room.status === 'lobby') {
-          delete room.players[uid];
+          delete room.players[pid];
           room.logs.push(`${player.nickname} left the room.`);
           this.adjustDefaultSettings(room);
 
@@ -210,42 +210,42 @@ export class RoomManager {
         const activeCount = Object.values(room.players).filter(p => !p.disconnected).length;
         if (activeCount === 0) {
           this.destroyRoom(code);
-          return { roomCode: code, playerUid: uid, isEmpty: true };
+          return { roomCode: code, playerId: pid, isEmpty: true };
         }
 
-        return { roomCode: code, playerUid: uid, isEmpty: false };
+        return { roomCode: code, playerId: pid, isEmpty: false };
       }
     }
     return null;
   }
 
-  public toggleReady(code: string, firebaseUid: string): RoomState | null {
+  public toggleReady(code: string, playerId: string): RoomState | null {
     const room = this.rooms[code];
     if (!room || room.status !== 'lobby') return null;
 
-    const player = room.players[firebaseUid];
+    const player = room.players[playerId];
     if (player && !player.isHost) {
       player.isReady = !player.isReady;
     }
     return room;
   }
 
-  public updateSettings(code: string, hostUid: string, settings: GameSettings): RoomState | null {
+  public updateSettings(code: string, hostPlayerId: string, settings: GameSettings): RoomState | null {
     const room = this.rooms[code];
     if (!room || room.status !== 'lobby') return null;
 
-    const player = room.players[hostUid];
+    const player = room.players[hostPlayerId];
     if (player && player.isHost) {
       room.settings = settings;
     }
     return room;
   }
 
-  public startGame(code: string, hostUid: string): RoomState | null {
+  public startGame(code: string, hostPlayerId: string): RoomState | null {
     const room = this.rooms[code];
     if (!room || room.status !== 'lobby') return null;
 
-    const host = room.players[hostUid];
+    const host = room.players[hostPlayerId];
     if (!host || !host.isHost) return null;
 
     // Check readiness (all non-host players must be ready)
@@ -283,19 +283,19 @@ export class RoomManager {
 
   public submitNightAction(
     code: string, 
-    actorUid: string, 
+    actorPlayerId: string, 
     action: { type: 'mafia' | 'doctor' | 'detective'; targetUid: string }
   ): { room: RoomState; detectiveResult?: { targetName: string; isMafia: boolean } } | null {
     const room = this.rooms[code];
     if (!room || room.status !== 'night') return null;
 
-    const actor = room.players[actorUid];
+    const actor = room.players[actorPlayerId];
     if (!actor || !actor.isAlive || actor.disconnected) return null;
 
     let detectiveResult;
 
     if (action.type === 'mafia' && actor.role === 'mafia') {
-      room.nightActions.mafiaVotes[actorUid] = action.targetUid;
+      room.nightActions.mafiaVotes[actorPlayerId] = action.targetUid;
       room.logs.push(`A Mafia member locked in their target.`);
     } else if (action.type === 'doctor' && actor.role === 'doctor') {
       room.nightActions.doctorHeal = action.targetUid;
@@ -320,11 +320,11 @@ export class RoomManager {
     return { room, detectiveResult };
   }
 
-  public submitDayVote(code: string, voterUid: string, targetUid: string | 'skip'): RoomState | null {
+  public submitDayVote(code: string, voterPlayerId: string, targetUid: string | 'skip'): RoomState | null {
     const room = this.rooms[code];
     if (!room || room.status !== 'day-voting') return null;
 
-    const voter = room.players[voterUid];
+    const voter = room.players[voterPlayerId];
     if (!voter || !voter.isAlive || voter.disconnected) return null;
 
     voter.votedFor = targetUid;
@@ -462,11 +462,11 @@ export class RoomManager {
     this.broadcastRoomState(room.code);
   }
 
-  public restartGame(code: string, hostUid: string): RoomState | null {
+  public restartGame(code: string, hostPlayerId: string): RoomState | null {
     const room = this.rooms[code];
     if (!room || room.status !== 'game-over') return null;
 
-    const host = room.players[hostUid];
+    const host = room.players[hostPlayerId];
     if (!host || !host.isHost) return null;
 
     // Reset everything back to lobby
@@ -570,11 +570,11 @@ export class RoomManager {
 
   // Logic: Role Assignment
   private assignRoles(room: RoomState) {
-    const playerUids = Object.keys(room.players);
-    const count = playerUids.length;
+    const playerIds = Object.keys(room.players);
+    const count = playerIds.length;
 
     // Shuffle array
-    const shuffledUids = [...playerUids].sort(() => Math.random() - 0.5);
+    const shuffledIds = [...playerIds].sort(() => Math.random() - 0.5);
 
     // Default settings limits
     let mafiaLimit = room.settings.mafiaCount;
@@ -591,30 +591,30 @@ export class RoomManager {
     let assignedCount = 0;
 
     // Reset roles
-    playerUids.forEach(uid => {
-      room.players[uid].role = 'villager';
+    playerIds.forEach(pid => {
+      room.players[pid].role = 'villager';
     });
 
     // Assign Mafia
     for (let i = 0; i < mafiaLimit; i++) {
-      if (shuffledUids[assignedCount]) {
-        room.players[shuffledUids[assignedCount]].role = 'mafia';
+      if (shuffledIds[assignedCount]) {
+        room.players[shuffledIds[assignedCount]].role = 'mafia';
         assignedCount++;
       }
     }
 
     // Assign Doctor
     for (let i = 0; i < doctorLimit; i++) {
-      if (shuffledUids[assignedCount]) {
-        room.players[shuffledUids[assignedCount]].role = 'doctor';
+      if (shuffledIds[assignedCount]) {
+        room.players[shuffledIds[assignedCount]].role = 'doctor';
         assignedCount++;
       }
     }
 
     // Assign Detective
     for (let i = 0; i < detectiveLimit; i++) {
-      if (shuffledUids[assignedCount]) {
-        room.players[shuffledUids[assignedCount]].role = 'detective';
+      if (shuffledIds[assignedCount]) {
+        room.players[shuffledIds[assignedCount]].role = 'detective';
         assignedCount++;
       }
     }

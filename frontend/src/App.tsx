@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LogOut, Wifi, WifiOff, Volume2, VolumeX, Award, Shield, Eye } from 'lucide-react';
 import { socket } from './config/socket';
-import { authProvider } from './config/firebase';
-import type { AuthUser } from './config/firebase';
+import { getOrCreatePlayerId } from './config/playerId';
 import type { RoomState, Message } from './types/game';
 import { Home } from './components/Home';
 import { Lobby } from './components/Lobby';
@@ -13,7 +12,7 @@ import type { MatchRecord } from './components/Stats';
 import { sound } from './config/sound';
 
 function App() {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [playerId, setPlayerId] = useState<string>('');
   const [nickname, setNickname] = useState('');
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [roomState, setRoomState] = useState<RoomState | null>(null);
@@ -28,23 +27,10 @@ function App() {
   const [showStats, setShowStats] = useState(false);
   const [highContrast, setHighContrast] = useState(false);
 
-  // 1. Auth Setup (Firebase with Local Fallback)
+  // 1. Persistent Player ID Initialization
   useEffect(() => {
-    const unsubscribe = authProvider.onAuthStateChanged(async (currentUser) => {
-      if (currentUser) {
-        setUser(currentUser);
-      } else {
-        try {
-          const newUser = await authProvider.signInAnonymously();
-          setUser(newUser);
-        } catch (err) {
-          console.error('Anonymous Auth failed:', err);
-          setError('Failed to initialize session. Please reload.');
-        }
-      }
-    });
-
-    return () => unsubscribe();
+    const id = getOrCreatePlayerId();
+    setPlayerId(id);
   }, []);
 
   // 2. Parse invite link query parameter on load
@@ -65,10 +51,10 @@ function App() {
 
   // 3. Socket Event Listeners
   useEffect(() => {
-    if (!user) return;
+    if (!playerId) return;
 
     // Connect socket manually with auth parameters
-    socket.auth = { firebaseUid: user.uid };
+    socket.auth = { playerId };
     socket.connect();
 
     const onConnect = () => {
@@ -79,7 +65,7 @@ function App() {
       const cachedCode = sessionStorage.getItem('mafia_room_code');
       const cachedNickname = localStorage.getItem('mafia_nickname');
       if (cachedCode && cachedNickname && !roomCode) {
-        socket.emit('join-room', { roomCode: cachedCode, firebaseUid: user.uid, nickname: cachedNickname }, (res: any) => {
+        socket.emit('join-room', { roomCode: cachedCode, playerId, nickname: cachedNickname }, (res: any) => {
           if (res.success) {
             setRoomState(res.room);
             setRoomCode(res.room.code);
@@ -107,7 +93,7 @@ function App() {
         const alreadyRecorded = sessionStorage.getItem(gameKey);
         
         if (!alreadyRecorded) {
-          const localPlayer = updatedRoom.players[user.uid];
+          const localPlayer = updatedRoom.players[playerId];
           if (localPlayer && localPlayer.role) {
             const outcome = 
               (updatedRoom.winner === 'mafia' && localPlayer.role === 'mafia') ||
@@ -168,7 +154,7 @@ function App() {
       socket.off('timer-tick', onTimerTick);
       socket.disconnect();
     };
-  }, [user, roomCode]);
+  }, [playerId, roomCode]);
 
   // 4. Sound initialization when audio turns on
   useEffect(() => {
@@ -181,11 +167,11 @@ function App() {
 
   // 5. Actions
   const handleCreateRoom = () => {
-    if (!user || !nickname.trim()) return;
+    if (!playerId || !nickname.trim()) return;
     setLoading(true);
     setError(null);
 
-    socket.emit('create-room', { firebaseUid: user.uid, nickname }, (res: any) => {
+    socket.emit('create-room', { playerId, nickname }, (res: any) => {
       if (!res.success) {
         setError(res.error || 'Failed to create room.');
         setLoading(false);
@@ -200,11 +186,11 @@ function App() {
   };
 
   const handleJoinRoom = (code: string) => {
-    if (!user || !nickname.trim() || !code) return;
+    if (!playerId || !nickname.trim() || !code) return;
     setLoading(true);
     setError(null);
 
-    socket.emit('join-room', { roomCode: code, firebaseUid: user.uid, nickname }, (res: any) => {
+    socket.emit('join-room', { roomCode: code, playerId, nickname }, (res: any) => {
       if (!res.success) {
         setError(res.error || 'Failed to join room.');
         setLoading(false);
@@ -219,25 +205,25 @@ function App() {
   };
 
   const handleToggleReady = () => {
-    if (!roomCode || !user) return;
-    socket.emit('toggle-ready', { roomCode, firebaseUid: user.uid });
+    if (!roomCode || !playerId) return;
+    socket.emit('toggle-ready', { roomCode, playerId });
   };
 
   const handleUpdateSettings = (settings: any) => {
-    if (!roomCode || !user) return;
-    socket.emit('update-settings', { roomCode, firebaseUid: user.uid, settings });
+    if (!roomCode || !playerId) return;
+    socket.emit('update-settings', { roomCode, playerId, settings });
   };
 
   const handleStartGame = () => {
-    if (!roomCode || !user) return;
-    socket.emit('start-game', { roomCode, firebaseUid: user.uid });
+    if (!roomCode || !playerId) return;
+    socket.emit('start-game', { roomCode, playerId });
   };
 
   const handleSendMessage = (text: string, isMafiaOnly: boolean) => {
-    if (!roomCode || !user) return;
+    if (!roomCode || !playerId) return;
     socket.emit('send-message', {
       roomCode,
-      firebaseUid: user.uid,
+      playerId,
       nickname,
       text,
       isMafiaOnly,
@@ -245,9 +231,9 @@ function App() {
   };
 
   const handleNightAction = (targetUid: string) => {
-    if (!roomCode || !user || !roomState) return;
+    if (!roomCode || !playerId || !roomState) return;
     
-    const localPlayer = roomState.players[user.uid];
+    const localPlayer = roomState.players[playerId];
     if (!localPlayer) return;
 
     const actionType = localPlayer.role;
@@ -255,7 +241,7 @@ function App() {
 
     socket.emit(
       'night-action',
-      { roomCode, firebaseUid: user.uid, action: { type: actionType, targetUid } },
+      { roomCode, playerId, action: { type: actionType, targetUid } },
       (res: any) => {
         if (res.success && res.detectiveResult) {
           setDetectiveResult(res.detectiveResult);
@@ -265,13 +251,13 @@ function App() {
   };
 
   const handleDayVote = (targetUid: string | 'skip') => {
-    if (!roomCode || !user) return;
-    socket.emit('day-vote', { roomCode, firebaseUid: user.uid, targetUid });
+    if (!roomCode || !playerId) return;
+    socket.emit('day-vote', { roomCode, playerId, targetUid });
   };
 
   const handleRestartGame = () => {
-    if (!roomCode || !user) return;
-    socket.emit('restart-game', { roomCode, firebaseUid: user.uid });
+    if (!roomCode || !playerId) return;
+    socket.emit('restart-game', { roomCode, playerId });
   };
 
   const handleLeaveRoom = () => {
@@ -399,7 +385,7 @@ function App() {
               <Lobby
                 roomCode={roomCode}
                 players={roomState.players}
-                currentUserUid={user?.uid || ''}
+                currentUserPlayerId={playerId}
                 settings={roomState.settings}
                 onUpdateSettings={handleUpdateSettings}
                 onToggleReady={handleToggleReady}
@@ -418,7 +404,7 @@ function App() {
             >
               <GameRoom
                 room={roomState}
-                currentUserUid={user?.uid || ''}
+                currentUserPlayerId={playerId}
                 onSendMessage={handleSendMessage}
                 messages={messages}
                 onNightAction={handleNightAction}

@@ -6,8 +6,8 @@ import { Chat } from './Chat';
 
 interface LobbyProps {
   roomCode: string;
-  players: { [firebaseUid: string]: Player };
-  currentUserUid: string;
+  players: { [playerId: string]: Player };
+  currentUserPlayerId: string;
   settings: GameSettings;
   onUpdateSettings: (settings: GameSettings) => void;
   onToggleReady: () => void;
@@ -19,7 +19,7 @@ interface LobbyProps {
 export const Lobby: React.FC<LobbyProps> = ({
   roomCode,
   players,
-  currentUserUid,
+  currentUserPlayerId,
   settings,
   onUpdateSettings,
   onToggleReady,
@@ -30,7 +30,7 @@ export const Lobby: React.FC<LobbyProps> = ({
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   
-  const localPlayer = players[currentUserUid];
+  const localPlayer = players[currentUserPlayerId];
   const isHost = localPlayer?.isHost;
   
   const playerList = Object.values(players);
@@ -268,10 +268,10 @@ export const Lobby: React.FC<LobbyProps> = ({
             className="space-y-2.5 flex-1 overflow-y-auto max-h-[300px] lg:max-h-[none]"
           >
             {playerList.map((player) => {
-              const isMe = player.firebaseUid === currentUserUid;
+              const isMe = player.playerId === currentUserPlayerId;
               return (
                 <motion.div
-                  key={player.firebaseUid}
+                  key={player.playerId}
                   variants={itemVariants}
                   className={`flex items-center justify-between p-3 rounded-xl border transition ${
                     isMe
@@ -361,7 +361,7 @@ export const Lobby: React.FC<LobbyProps> = ({
         <Chat
           messages={messages}
           onSendMessage={onSendMessage}
-          currentUserUid={currentUserUid}
+          currentUserPlayerId={currentUserPlayerId}
           playerRole={localPlayer?.role}
           gameStatus="lobby"
         />

@@ -7,7 +7,7 @@ import { socket } from '../config/socket';
 interface ChatProps {
   messages: Message[];
   onSendMessage: (text: string, isMafiaOnly: boolean) => void;
-  currentUserUid: string;
+  currentUserPlayerId: string;
   playerRole: 'mafia' | 'doctor' | 'detective' | 'villager' | null;
   gameStatus: 'lobby' | 'night' | 'day-discussion' | 'day-voting' | 'game-over';
 }
@@ -17,7 +17,7 @@ const EMOJIS = ['🤫', '🕵️‍♂️', '💀', '🩸', '🔫', '🏥', '�
 export const Chat: React.FC<ChatProps> = ({
   messages,
   onSendMessage,
-  currentUserUid,
+  currentUserPlayerId,
   playerRole,
   gameStatus,
 }) => {
@@ -138,7 +138,7 @@ export const Chat: React.FC<ChatProps> = ({
           </div>
         ) : (
           visibleMessages.map((msg) => {
-            const isMe = msg.senderUid === currentUserUid;
+            const isMe = msg.playerId === currentUserPlayerId;
             return (
               <div
                 key={msg.id}

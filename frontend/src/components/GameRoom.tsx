@@ -8,7 +8,7 @@ import { sound } from '../config/sound';
 
 interface GameRoomProps {
   room: RoomState;
-  currentUserUid: string;
+  currentUserPlayerId: string;
   onSendMessage: (text: string, isMafiaOnly: boolean) => void;
   messages: Message[];
   onNightAction: (targetUid: string) => void;
@@ -20,7 +20,7 @@ interface GameRoomProps {
 
 export const GameRoom: React.FC<GameRoomProps> = ({
   room,
-  currentUserUid,
+  currentUserPlayerId,
   onSendMessage,
   messages,
   onNightAction,
@@ -29,7 +29,7 @@ export const GameRoom: React.FC<GameRoomProps> = ({
   detectiveResult,
   setDetectiveResult,
 }) => {
-  const localPlayer = room.players[currentUserUid];
+  const localPlayer = room.players[currentUserPlayerId];
   const isAlive = localPlayer?.isAlive;
   const isHost = localPlayer?.isHost;
   const role = localPlayer?.role;
@@ -71,7 +71,7 @@ export const GameRoom: React.FC<GameRoomProps> = ({
 
   const hasVotedThisNight = () => {
     if (role === 'mafia') {
-      return !!room.nightActions.mafiaVotes[currentUserUid];
+      return !!room.nightActions.mafiaVotes[currentUserPlayerId];
     }
     if (role === 'doctor') {
       return room.nightActions.doctorHeal !== null;
@@ -202,7 +202,7 @@ export const GameRoom: React.FC<GameRoomProps> = ({
 
             <div className="space-y-3 flex-1 overflow-y-auto max-h-[400px] lg:max-h-[none]">
               {playerList.map((player) => {
-                const isMe = player.firebaseUid === currentUserUid;
+                const isMe = player.playerId === currentUserPlayerId;
                 const isTargetable = 
                   isAlive && 
                   player.isAlive && 
@@ -229,12 +229,12 @@ export const GameRoom: React.FC<GameRoomProps> = ({
                 }
 
                 // Tally votes received in day-voting
-                const votesReceived = playerList.filter(p => p.votedFor === player.firebaseUid).length;
+                const votesReceived = playerList.filter(p => p.votedFor === player.playerId).length;
                 const votePercentage = alivePlayers.length > 0 ? (votesReceived / alivePlayers.length) * 100 : 0;
 
                 return (
                   <div
-                    key={player.firebaseUid}
+                    key={player.playerId}
                     className={`flex flex-col p-3.5 rounded-xl border transition ${
                       !player.isAlive 
                         ? 'bg-mafia-bg/15 border-mafia-border/30 opacity-40' 
@@ -280,7 +280,7 @@ export const GameRoom: React.FC<GameRoomProps> = ({
                       <div className="flex items-center gap-2">
                         {isTargetable && (
                           <button
-                            onClick={() => handleActionClick(player.firebaseUid)}
+                            onClick={() => handleActionClick(player.playerId)}
                             className={`text-[9px] font-bold uppercase px-2.5 py-1.5 rounded-lg border active:scale-95 transition-all ${
                               room.status === 'night' && role === 'mafia'
                                 ? 'bg-mafia-accent/10 border-mafia-danger text-mafia-danger hover:bg-mafia-accent'
@@ -466,7 +466,7 @@ export const GameRoom: React.FC<GameRoomProps> = ({
           <Chat
             messages={messages}
             onSendMessage={onSendMessage}
-            currentUserUid={currentUserUid}
+            currentUserPlayerId={currentUserPlayerId}
             playerRole={role}
             gameStatus={room.status}
           />
@@ -545,7 +545,7 @@ export const GameRoom: React.FC<GameRoomProps> = ({
                 Civic Registry breakdown:
               </div>
               {playerList.map((player) => (
-                <div key={player.firebaseUid} className="flex justify-between items-center py-2 font-medium">
+                <div key={player.playerId} className="flex justify-between items-center py-2 font-medium">
                   <span className="text-gray-200">
                     {player.nickname} {!player.isAlive && '💀'}
                   </span>

@@ -1,6 +1,6 @@
 export interface Player {
   id: string;
-  firebaseUid: string;
+  playerId: string;
   nickname: string;
   isReady: boolean;
   isHost: boolean;
@@ -18,12 +18,12 @@ export interface GameSettings {
 
 export interface RoomState {
   code: string;
-  players: { [firebaseUid: string]: Player };
+  players: { [playerId: string]: Player };
   status: 'lobby' | 'night' | 'day-discussion' | 'day-voting' | 'game-over';
   winner: 'town' | 'mafia' | null;
   settings: GameSettings;
   nightActions: {
-    mafiaVotes: { [mafiaUid: string]: string };
+    mafiaVotes: { [mafiaPlayerId: string]: string };
     doctorHeal: string | null;
     detectiveInvestigate: string | null;
   };
@@ -35,7 +35,7 @@ export interface RoomState {
 export interface Message {
   id: string;
   senderName: string;
-  senderUid: string;
+  playerId: string;
   text: string;
   timestamp: string;
   isMafiaOnly?: boolean;
