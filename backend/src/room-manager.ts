@@ -38,7 +38,9 @@ export class RoomManager {
   private rooms: { [code: string]: RoomState } = {};
   private timerIntervals: { [code: string]: NodeJS.Timeout } = {};
 
-  constructor(private io: Server) {}
+  constructor(private io: Server) {
+    console.log('[DEBUG] RoomManager constructed.');
+  }
 
   public getRoom(code: string): RoomState | undefined {
     return this.rooms[code];
@@ -136,17 +138,16 @@ export class RoomManager {
     };
 
     this.rooms[code] = newRoom;
+    console.log(`[DEBUG] Room added: ${code}. Active rooms:`, Object.keys(this.rooms));
     return newRoom;
   }
 
   public joinRoom(code: string, playerId: string, nickname: string, socketId: string): RoomState | null {
-    console.log("Join requested:", code);
-    console.log("Available rooms:", Object.keys(this.rooms));
-
+    console.log(`[DEBUG] Player ${nickname} trying to join room ${code}. Active rooms:`, Object.keys(this.rooms));
     const room = this.rooms[code];
 
     if (!room) {
-      console.log("Room not found!");
+      console.log(`[DEBUG] Room ${code} not found in active rooms:`, Object.keys(this.rooms));
       return null;
     }
 
@@ -156,11 +157,13 @@ export class RoomManager {
       player.id = socketId;
       player.disconnected = false;
       room.logs.push(`${player.nickname} reconnected.`);
+      console.log(`[DEBUG] Player ${nickname} reconnected to room ${code}. Active rooms:`, Object.keys(this.rooms));
       return room;
     }
 
     // Only allow new joins if in lobby
     if (room.status !== 'lobby') {
+      console.log(`[DEBUG] Room ${code} join failed: game in progress.`);
       return null;
     }
 
@@ -182,10 +185,12 @@ export class RoomManager {
     // Auto-update settings based on player count
     this.adjustDefaultSettings(room);
 
+    console.log(`[DEBUG] Player ${nickname} successfully joined room ${code}. Active rooms:`, Object.keys(this.rooms));
     return room;
   }
 
   public disconnectPlayer(socketId: string): { roomCode: string; playerId: string; isEmpty: boolean } | null {
+    console.log(`[DEBUG] Socket ${socketId} disconnected. Searching for player...`);
     for (const code of Object.keys(this.rooms)) {
       const room = this.rooms[code];
       const playerEntry = Object.entries(room.players).find(([_, p]) => p.id === socketId);
@@ -193,6 +198,7 @@ export class RoomManager {
       if (playerEntry) {
         const [pid, player] = playerEntry;
         player.disconnected = true;
+        console.log(`[DEBUG] Found player ${player.nickname} (ID: ${pid}) in room ${code}. Status: ${room.status}`);
 
         // If in lobby, we can just remove them outright
         if (room.status === 'lobby') {
@@ -215,14 +221,18 @@ export class RoomManager {
 
         // If no non-disconnected players are left, we delete the room
         const activeCount = Object.values(room.players).filter(p => !p.disconnected).length;
+        console.log(`[DEBUG] Room ${code} active player count: ${activeCount}`);
         if (activeCount === 0) {
           this.destroyRoom(code);
+          console.log(`[DEBUG] Room ${code} destroyed. Active rooms:`, Object.keys(this.rooms));
           return { roomCode: code, playerId: pid, isEmpty: true };
         }
 
+        console.log(`[DEBUG] Room ${code} disconnect handled. Active rooms:`, Object.keys(this.rooms));
         return { roomCode: code, playerId: pid, isEmpty: false };
       }
     }
+    console.log(`[DEBUG] Socket ${socketId} was not associated with any active room. Active rooms:`, Object.keys(this.rooms));
     return null;
   }
 
@@ -526,6 +536,7 @@ export class RoomManager {
   }
 
   private destroyRoom(code: string) {
+    console.log(`[DEBUG] destroyRoom called for room: ${code}`);
     this.stopTimer(code);
     delete this.rooms[code];
   }

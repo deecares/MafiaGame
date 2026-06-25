@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LogOut, Wifi, WifiOff, Volume2, VolumeX, Award, Shield, Eye } from 'lucide-react';
 import { socket } from './config/socket';
@@ -49,6 +49,11 @@ function App() {
     }
   }, []);
 
+  const roomCodeRef = useRef<string | null>(null);
+  useEffect(() => {
+    roomCodeRef.current = roomCode;
+  }, [roomCode]);
+
   // 3. Socket Event Listeners
   useEffect(() => {
     if (!playerId) return;
@@ -64,7 +69,7 @@ function App() {
       // Auto-rejoin if room code existed in session storage (reconnection resilience)
       const cachedCode = sessionStorage.getItem('mafia_room_code');
       const cachedNickname = localStorage.getItem('mafia_nickname');
-      if (cachedCode && cachedNickname && !roomCode) {
+      if (cachedCode && cachedNickname && !roomCodeRef.current) {
         socket.emit('join-room', { roomCode: cachedCode, playerId, nickname: cachedNickname }, (res: any) => {
           if (res.success) {
             setRoomState(res.room);
@@ -154,7 +159,7 @@ function App() {
       socket.off('timer-tick', onTimerTick);
       socket.disconnect();
     };
-  }, [playerId, roomCode]);
+  }, [playerId]);
 
   // 4. Sound initialization when audio turns on
   useEffect(() => {
